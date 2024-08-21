@@ -1,0 +1,86 @@
+---
+title: "Análise de Cancelamentos de Assinaturas"
+format:
+  html:
+    self-contained: true
+editor: visual
+---
+
+```{r, echo=FALSE, message=FALSE}
+# install.packages("readr")
+# install.packages("dplyr")
+# install.packages("ggplot2")
+# install.packages("echarts4r")
+
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(echarts4r)
+
+dados <- readr::read_csv(
+  "https://raw.githubusercontent.com/wrprates/open-data/master/telco_customer_churn.csv"
+) |>
+  dplyr::mutate(across(where(is.character), as.factor))
+
+```
+
+Este relatório apresenta uma análise de teste de hipóteses, buscando compreender as razões pelas quais os clientes cancelam o serviço de assinatura.
+
+## Hipótese 1. Clientes com contrato mensal cancelam mais que os demais
+
+> **Análise proposta:** realizar um teste Qui-quadrado para diferenças de proporções.
+
+A seguir temos um gráfico de barras indicando as prorporções de Churn dentro de cada tipo de contrato.
+
+```{r, echo=FALSE}
+contrato_data <- dados |>
+  count(Contract, Churn) |>
+  group_by(Contract) |>
+  mutate(Percent = round(n / sum(n) * 100, 2)) |>
+  ungroup() |>
+  group_by(Churn)
+
+contrato_data |>
+  e_charts(Contract) |>
+  e_bar(Percent, stack = "grp") |>
+  e_tooltip(trigger = "axis")
+```
+
+Para avaliar se a proporção de cancelamentos (churn) é maior entre clientes com contrato mensal em comparação com aqueles que possuem contratos anuais ou bienais, foi realizado um teste de proporção Qui-quadrado, cujo resultado é apresentado a seguir.
+
+
+```{r, echo=FALSE}
+# Contagem de cancelamentos por tipo de contrato
+mensal_churn <- dados |>
+  filter(Contract == "Month-to-month" & Churn == "Yes") |>
+  count() |>
+  pull(n)
+
+outros_churn <- dados |>
+  filter(Contract != "Month-to-month" & Churn == "Yes") |>
+  count() |>
+  pull(n)
+
+# Contagem total de clientes por tipo de contrato
+mensal_total <- dados |>
+  filter(Contract == "Month-to-month") |>
+  count() |>
+  pull(n)
+
+outros_total <- dados |>
+  filter(Contract != "Month-to-month") |>
+  count() |>
+  pull(n)
+
+# Teste de proporção
+prop_test <- prop.test(
+  c(mensal_churn, outros_churn),
+  c(mensal_total, outros_total), 
+  alternative = "greater"
+)
+
+prop_test
+```
+O resultado do teste sugere que **a proporção de cancelamentos é significativamente maior entre clientes com contrato mensal em comparação com aqueles com contratos anuais ou bienais** (`p-valor < 0,05`). Isso indica que clientes com contrato mensal têm uma tendência estatisticamente relevante de cancelar mais os serviços.
+
+**Resultado da hipótese:** Validada.
